@@ -1,0 +1,45 @@
+name: Build Kernel
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout Kernel Source
+      uses: actions/checkout@v3
+
+    - name: Set up build environment
+      run: |
+        sudo apt update
+        sudo apt install -y build-essential bc bison flex libssl-dev libelf-dev \
+                            python3 python3-pip libncurses-dev git clang lld
+
+    - name: Clone prebuilt Clang
+      run: |
+        mkdir clang
+        cd clang
+        wget https://github.com/ClangBuiltLinux/tc-build/releases/download/20240423/clang-nightly-20240423.tar.xz
+        tar -xf clang-nightly-20240423.tar.xz
+        cd ..
+
+    - name: Build Kernel
+      run: |
+        export ARCH=arm64
+        export SUBARCH=arm64
+        export KBUILD_BUILD_USER=github
+        export KBUILD_BUILD_HOST=actions
+        export PATH=$PWD/clang/bin:$PATH
+        make O=out peridot_defconfig
+        make -j$(nproc) O=out \
+          CROSS_COMPILE=aarch64-linux-gnu- \
+          CC=clang \
+          LLVM=1
+
+    - name: Upload Kernel Image
+      uses: actions/upload-artifact@v3
+      with:
+        name: Image.gz-dtb
+        path: out/arch/arm64/boot/Image.gz-dtb
